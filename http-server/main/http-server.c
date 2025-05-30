@@ -52,7 +52,7 @@ esp_err_t bme_handler(httpd_req_t *req){
     snprintf(resp, sizeof(resp),
             "<html>"
             "<head><meta name='viewport' content='width=device-width, initial-scale=1'>"
-            "<meta http-equiv='refresh' content='2'></head>"
+            //"<meta http-equiv='refresh' content='2'></head>"
             "<body style='font-family: Arial; text-align: center;'>"
             "<h1>BME280 Sensor Data</h1>"
             "<p style='font-size: 24px;'>Temperature: <strong>%.1f °C</strong></p>"

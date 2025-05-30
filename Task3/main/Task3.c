@@ -6,13 +6,21 @@
 #include "bme280_sensor_i2c.c"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "driver/gpio.h"
 #include <string.h>
 
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
-
+#define FAN_GPIO              0
+static const char *TAG = "fan_control";
 void app_main(void)
 {
+    //fan control
+    gpio_reset_pin(FAN_GPIO);
+    gpio_set_direction(FAN_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(FAN_GPIO, 1);
+    ESP_LOGI(TAG, "Fan is ON");
+
     i2c_master_bus_handle_t busHandle;
     i2c_master_dev_handle_t sensorHandle;
     
