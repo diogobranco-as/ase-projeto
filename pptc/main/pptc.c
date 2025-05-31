@@ -45,6 +45,32 @@ esp_err_t bme_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t root_handler(httpd_req_t *req){
+    const char *html_response = 
+        "<!DOCTYPE html>"
+        "<html>"
+        "<head><title>Potted Plant Temperature Control</title></head>"
+        "<body>"
+        "<body>"
+        "<h1>Temperature Monitor</h1>"
+        "<p id=\"temperature\">Loading...</p>"
+        "<script>"
+        "setInterval(function() {"
+        "  fetch('/bme')"
+        "       .then(response => response.text())"
+        "       .then(data => {"
+        "           document.getElementById('temperature').innerText = data;"
+        "       });"
+        "}, 2000);"
+        "</script>"
+        "</body>"
+        "</html>";
+
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, html_response, strlen(html_response));
+    return ESP_OK;
+}
+
 // We had add this to avoid favicon.ico missing errors
 esp_err_t favicon_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "image/x-icon");
@@ -56,6 +82,13 @@ httpd_uri_t uri_bme = {
     .uri      = "/bme",
     .method   = HTTP_GET,
     .handler  = bme_handler,
+    .user_ctx = NULL
+};
+
+httpd_uri_t uri_root = {
+    .uri      = "/",
+    .method   = HTTP_GET,
+    .handler  = root_handler,
     .user_ctx = NULL
 };
 
@@ -71,6 +104,7 @@ httpd_handle_t start_webserver(void) {
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) == ESP_OK) {
         httpd_register_uri_handler(server, &uri_bme);
+        httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_favicon);
     }
     return server;
@@ -97,8 +131,7 @@ void wifi_init_softap(void) {
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config);
     esp_wifi_start();
-    ESP_LOGI("wifi", "WiFi Access Point started with SSID: %s, Password: %s", wifi_config.ap.ssid, wifi_config.ap.password);
-    ESP_LOGI("wifi", "Connect to the Access Point using SSID: %s and Password: %s", WIFI_SSID, WIFI_PASSWORD);
+    ESP_LOGI("wifi", "Connect to the Access Point with SSID: %s and Password: %s", WIFI_SSID, WIFI_PASSWORD);
 }
 
 void app_main(void)
