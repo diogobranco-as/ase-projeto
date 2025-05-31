@@ -134,19 +134,24 @@ void wifi_init_softap(void) {
     ESP_LOGI("wifi", "Connect to the Access Point with SSID: %s and Password: %s", WIFI_SSID, WIFI_PASSWORD);
 }
 
-void app_main(void)
-{
-    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+void init_nvs(void){
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+}
+
+void app_main(void)
+{
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+    
+    init_nvs();
     wifi_init_softap();
-
-
+    
     bme280_sensor_init();
+
     start_webserver();
     while (1) {
         temperature = read_temperature();
