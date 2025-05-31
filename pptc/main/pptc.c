@@ -13,6 +13,7 @@
 #include "nvs_flash.h"
 #include "esp_netif.h"
 #include "esp_littlefs.h"
+#include "esp_timer.h"
 
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
@@ -51,24 +52,72 @@ esp_err_t root_handler(httpd_req_t *req){
         "<!DOCTYPE html>"
         "<html>"
         "<head><title>Potted Plant Temperature Control</title></head>"
-        "<body>"
+        "<title>Potted Plant Temperature Control</title>"
+        "<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>"
+        "</head>"
         "<body>"
         "<h1>Temperature Monitor</h1>"
-        "<p id=\"temperature\">Loading...</p>"
+        "<canvas id=\"tempChart\" width=\"600\" height=\"300\"></canvas>"
         "<script>"
-        "setInterval(function() {"
-        "  fetch('/bme')"
-        "       .then(response => response.text())"
-        "       .then(data => {"
-        "           document.getElementById('temperature').innerText = data;"
-        "       });"
-        "}, 2000);"
+        "async function fetchLogData() {"
+        "  const response = await fetch('/logs');"
+        "  const text = await response.text();"
+        "  const lines = text.trim().split('\\n');"
+        "  const labels = [];"
+        "  const data = [];"
+        "  lines.forEach(line => {"
+        "    const [time, temp] = line.split('|').map(s => s.trim());"
+        "    labels.push(time);"
+        "    data.push(parseFloat(temp));"
+        "  });"
+        "  return { labels, data };"
+        "}"
+
+        "let chartInstance = null;"
+
+        "async function drawChart() {"
+        "  const { labels, data } = await fetchLogData();"
+        "  const ctx = document.getElementById('tempChart').getContext('2d');"
+        "  if(chartInstance) chartInstance.destroy();"
+        "  chartInstance = new Chart(ctx, {"
+        "    type: 'line',"
+        "    data: { labels: labels, datasets: [{ label: 'Temperature (°C)', data: data, borderColor: 'red', fill: false }] },"
+        "    options: {"
+        "      scales: {"
+        "        x: { title: { display: true, text: 'Time' } },"
+        "        y: { title: { display: true, text: 'Temperature (°C)' } }"
+        "      }"
+        "    }"
+        "  });"
+        "}"
+
+        "drawChart();"
+        "setInterval(drawChart, 4000);"
         "</script>"
+        
         "</body>"
         "</html>";
 
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, html_response, strlen(html_response));
+    return ESP_OK;
+}
+
+esp_err_t log_handler(httpd_req_t *req) {
+    FILE *file = fopen(LITTLEFS_BASE_PATH "/temp_log.txt", "r");
+    if (!file) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "text/plain");
+
+    char line[64];
+    while (fgets(line, sizeof(line), file)) {
+        httpd_resp_send_chunk(req, line, strlen(line));
+    }
+    fclose(file);
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -93,6 +142,13 @@ httpd_uri_t uri_root = {
     .user_ctx = NULL
 };
 
+httpd_uri_t uri_logs = {
+    .uri      = "/logs",
+    .method   = HTTP_GET,
+    .handler  = log_handler,
+    .user_ctx = NULL
+};
+
 httpd_uri_t uri_favicon = {
     .uri      = "/favicon.ico",
     .method   = HTTP_GET,
@@ -107,6 +163,7 @@ httpd_handle_t start_webserver(void) {
         httpd_register_uri_handler(server, &uri_bme);
         httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_favicon);
+        httpd_register_uri_handler(server, &uri_logs);
     }
     return server;
 }
@@ -159,14 +216,34 @@ void mount_littlefs(void){
         ESP_LOGI("littlefs", "Filesystem mounted at /littlefs");
     }
 }
+void format_time(char *buffer, size_t len){
+    int64_t time_us = esp_timer_get_time();
+    int seconds = time_us / 1000000;
+    int minutes = (seconds / 60) % 60;
+    int hours = (seconds / 3600) % 24;
+    seconds %= 60;
+    snprintf(buffer, len, "%02d:%02d:%02d", hours, minutes, seconds);
+}
 
 void log_temp_to_file(float temperature) {
     FILE *file = fopen(LITTLEFS_BASE_PATH "/temp_log.txt", "a");
     if(file){
-        fprintf(file, "Temperature : %.2f °C\n", temperature);
+        char time_str[16];
+        format_time(time_str, sizeof(time_str));
+        fprintf(file, "%s | %.2f\n",time_str, temperature);
         fclose(file);
     }else {
         ESP_LOGE("littlefs", "Failed to open temp_log.txt for writing");
+    }
+}
+
+void clear_temp_log_file(void) {
+    FILE *file = fopen(LITTLEFS_BASE_PATH "/temp_log.txt", "w");
+    if (file) {
+        fclose(file);  // Opening in "w" mode truncates the file
+        ESP_LOGI("littlefs", "Temperature log file cleared.");
+    } else {
+        ESP_LOGE("littlefs", "Failed to open temp_log.txt for clearing");
     }
 }
 
@@ -175,7 +252,7 @@ void app_main(void)
     esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
 
     mount_littlefs();
-    
+    clear_temp_log_file();
     init_nvs();
     wifi_init_softap();
 
