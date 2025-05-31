@@ -12,13 +12,14 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "esp_littlefs.h"
 
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
 #define FAN_GPIO              0
 #define WIFI_SSID "Potted Plant Temp Control"
 #define WIFI_PASSWORD "104341103320"
-
+#define LITTLEFS_BASE_PATH "/littlefs"
 
 static i2c_master_bus_handle_t busHandle;
 static i2c_master_dev_handle_t sensorHandle;
@@ -143,19 +144,47 @@ void init_nvs(void){
     ESP_ERROR_CHECK(ret);
 }
 
+void mount_littlefs(void){
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = LITTLEFS_BASE_PATH,
+        .partition_label = "storage",
+        .format_if_mount_failed = true,
+        .dont_mount = false
+    };
+
+    esp_err_t err = esp_vfs_littlefs_register(&conf);
+    if (err != ESP_OK) {
+        ESP_LOGE("littlefs", "Mount failed (%s)", esp_err_to_name(err));
+    } else {
+        ESP_LOGI("littlefs", "Filesystem mounted at /littlefs");
+    }
+}
+
+void log_temp_to_file(float temperature) {
+    FILE *file = fopen(LITTLEFS_BASE_PATH "/temp_log.txt", "a");
+    if(file){
+        fprintf(file, "Temperature : %.2f °C\n", temperature);
+        fclose(file);
+    }else {
+        ESP_LOGE("littlefs", "Failed to open temp_log.txt for writing");
+    }
+}
+
 void app_main(void)
 {
     esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+
+    mount_littlefs();
     
     init_nvs();
     wifi_init_softap();
-    
+
     bme280_sensor_init();
 
     start_webserver();
     while (1) {
         temperature = read_temperature();
-        printf("Temperature: %.2f °C\n", temperature);
+        log_temp_to_file(temperature);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
