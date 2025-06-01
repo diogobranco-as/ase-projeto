@@ -6,4 +6,5 @@ idf_component_register(SRCS "bme280_sensor_i2c.c" "pptc.c"
                     REQUIRES esp_driver_i2c
                     REQUIRES esp_driver_gpio
                     REQUIRES esp_timer
-                    REQUIRES lwip)
+                    REQUIRES lwip
+                    REQUIRES esp_driver_ledc)

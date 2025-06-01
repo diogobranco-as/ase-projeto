@@ -14,17 +14,29 @@
 #include "esp_netif.h"
 #include "esp_littlefs.h"
 #include "esp_timer.h"
+#include "driver/ledc.h"
 
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
-#define FAN_GPIO              0
+
 #define WIFI_SSID "Potted Plant Temp Control"
 #define WIFI_PASSWORD "104341103320"
 #define LITTLEFS_BASE_PATH "/littlefs"
 
+#define FAN_GPIO              0
+#define LEDC_TIMER              LEDC_TIMER_0
+#define LEDC_MODE               LEDC_LOW_SPEED_MODE  
+#define LEDC_CHANNEL            LEDC_CHANNEL_0
+#define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // duty res 13bits
+#define LEDC_FREQUENCY          (4000) // frequency in Hz 4000
+#define MAX_BRIGHTNESS_LEVELS   10
+#define TEMP_MIN 24.0
+#define TEMP_MAX 30.0
+
 static i2c_master_bus_handle_t busHandle;
 static i2c_master_dev_handle_t sensorHandle;
 static float temperature = 0.0;
+static int duty = 0;
 
 //initialize and configer BME280 sensor
 void bme280_sensor_init(void) {
@@ -247,6 +259,40 @@ void clear_temp_log_file(void) {
     }
 }
 
+void fan_pwm_init(void) {
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode       = LEDC_MODE,
+        .duty_resolution  = LEDC_DUTY_RES, 
+        .timer_num        = LEDC_TIMER,
+        .freq_hz          = LEDC_FREQUENCY,             
+        .clk_cfg          = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&ledc_timer);
+
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode     = LEDC_MODE,
+        .channel        = LEDC_CHANNEL,
+        .timer_sel      = LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = FAN_GPIO,
+        .duty           = 0, // initially off
+        .hpoint         = 0
+    };
+    ledc_channel_config(&ledc_channel);
+}
+
+void temperature_pwm_control(float temperature) {
+    if (temperature < TEMP_MIN) {
+        duty = 0; 
+    } else if (temperature > TEMP_MAX) {
+        duty = 8191;
+    } else {
+        duty = (int)((temperature - TEMP_MIN) / (TEMP_MAX - TEMP_MIN) * 8191); // Scale to PWM range
+    }
+    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty));
+    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+}
+
 void app_main(void)
 {
     esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
@@ -259,9 +305,12 @@ void app_main(void)
     bme280_sensor_init();
 
     start_webserver();
+    fan_pwm_init(); 
+
     while (1) {
         temperature = read_temperature();
         log_temp_to_file(temperature);
+        temperature_pwm_control(temperature);
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
