@@ -30,8 +30,8 @@
 #define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // duty res 13bits
 #define LEDC_FREQUENCY          (4000) // frequency in Hz 4000
 #define MAX_BRIGHTNESS_LEVELS   10
-#define TEMP_MIN 24.0
-#define TEMP_MAX 30.0
+#define TEMP_MIN 19.0
+#define TEMP_MAX 26.0
 
 static i2c_master_bus_handle_t busHandle;
 static i2c_master_dev_handle_t sensorHandle;
@@ -48,15 +48,6 @@ void bme280_sensor_init(void) {
 
 float read_temperature(void) {
     return bme280_read_temperature(sensorHandle);
-}
-
-
-// Temp handler
-esp_err_t bme_handler(httpd_req_t *req) {
-    char resp[64];
-    snprintf(resp, sizeof(resp), "Temperature: %.2f ºC", temperature);
-    httpd_resp_send(req, resp, strlen(resp));
-    return ESP_OK;
 }
 
 esp_err_t root_handler(httpd_req_t *req){
@@ -140,12 +131,7 @@ esp_err_t favicon_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-httpd_uri_t uri_bme = {
-    .uri      = "/bme",
-    .method   = HTTP_GET,
-    .handler  = bme_handler,
-    .user_ctx = NULL
-};
+
 
 httpd_uri_t uri_root = {
     .uri      = "/",
@@ -172,7 +158,6 @@ httpd_handle_t start_webserver(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) == ESP_OK) {
-        httpd_register_uri_handler(server, &uri_bme);
         httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_favicon);
         httpd_register_uri_handler(server, &uri_logs);
