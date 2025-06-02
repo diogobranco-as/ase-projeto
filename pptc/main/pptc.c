@@ -10,7 +10,6 @@
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
 
-#define LITTLEFS_BASE_PATH "/littlefs"
 #define TEMP_MIN 20.0
 #define TEMP_MAX 27.0
 
