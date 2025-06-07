@@ -10,8 +10,8 @@
 #define BME280_SCL_IO         3
 #define BME280_SDA_IO         2
 
-#define TEMP_MIN 20.0
-#define TEMP_MAX 25.0
+#define TEMP_MIN 18.0
+#define TEMP_MAX 28.0
 
 static i2c_master_bus_handle_t busHandle;
 static i2c_master_dev_handle_t sensorHandle;
